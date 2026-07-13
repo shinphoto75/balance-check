@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>ゆらぎログ - バランスセルフチェック</title>
+<style>
+  :root{
+    --bg:#12161c;
+    --surface:#1b2129;
+    --surface2:#232b35;
+    --line:#2c3542;
+    --text:#f3f5f7;
+    --text-dim:#8a95a5;
+    --teal:#5ec9c0;
+    --teal-dim:#3a7a74;
+    --amber:#e8a23d;
+    --red:#d9705f;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Hiragino Sans",sans-serif;
+    overscroll-behavior:none;
+  }
+  .mono{font-family:"SF Mono",ui-monospace,Menlo,monospace;}
+  #app{
+    max-width:480px;margin:0 auto;min-height:100vh;
+    display:flex;flex-direction:column;
+    padding:env(safe-area-inset-top) 20px calc(env(safe-area-inset-bottom) + 24px);
+  }
+  .screen{display:none;flex:1;flex-direction:column;padding-top:28px;}
+  .screen.active{display:flex;}
+  h1{font-size:22px;font-weight:700;letter-spacing:.01em;margin:0 0 4px;}
+  .sub{color:var(--text-dim);font-size:13px;margin:0 0 28px;line-height:1.6;}
+  .card{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:16px;padding:18px 18px;margin-bottom:14px;
+  }
+  .row{display:flex;justify-content:space-between;align-items:center;gap:12px;}
+  .label{font-size:14px;color:var(--text-dim);}
+  .seg{display:flex;background:var(--surface2);border-radius:10px;padding:3px;gap:3px;}
+  .seg button{
+    flex:1;border:none;background:transparent;color:var(--text-dim);
+    padding:10px 8px;border-radius:8px;font-size:13px;font-weight:600;
+    transition:.15s;
+  }
+  .seg button.on{background:var(--teal);color:#0b1512;}
+  input[type=number]{
+    width:80px;text-align:right;background:var(--surface2);border:1px solid var(--line);
+    color:var(--text);border-radius:8px;padding:8px 10px;font-size:15px;
+  }
+  .btn{
+    display:block;width:100%;text-align:center;border:none;border-radius:14px;
+    padding:16px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px;
+  }
+  .btn-primary{background:var(--teal);color:#0b1512;}
+  .btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--line);}
+  .btn-danger{background:var(--red);color:#1a0d0a;}
+  .spacer{flex:1;}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;text-align:center;}
+  .countdown{font-size:88px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--teal);line-height:1;}
+  .steps{text-align:left;color:var(--text-dim);font-size:14px;line-height:2;margin-top:24px;}
+  .steps b{color:var(--text);}
+  .pulse{
+    width:120px;height:120px;border-radius:50%;
+    background:radial-gradient(circle,rgba(94,201,192,.25),transparent 70%);
+    display:flex;align-items:center;justify-content:center;margin-bottom:20px;
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  .pulse-dot{width:52px;height:52px;border-radius:50%;background:var(--teal);}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.15);opacity:.5}}
+  .timer-big{font-size:56px;font-weight:800;font-variant-numeric:tabular-nums;margin:6px 0 2px;}
+  .hint{color:var(--text-dim);font-size:13px;}
+  .compass-wrap{display:flex;justify-content:center;margin:6px 0 18px;}
+  .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .rcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;}
+  .rcard .dir{font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+  .rcard .val{font-size:20px;font-weight:800;}
+  .rcard .sub2{font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .hist-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 4px;border-bottom:1px solid var(--line);font-size:14px;
+  }
+  .hist-item:last-child{border-bottom:none;}
+  .hist-date{color:var(--text);font-weight:600;}
+  .hist-meta{color:var(--text-dim);font-size:12px;margin-top:2px;}
+  .tabbar{
+    display:flex;gap:8px;margin-bottom:18px;
+  }
+  .tabbar button{
+    flex:1;background:none;border:none;color:var(--text-dim);
+    font-size:13px;font-weight:700;padding:10px 0;border-bottom:2px solid transparent;
+  }
+  .tabbar button.on{color:var(--teal);border-color:var(--teal);}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--surface2);border:1px solid var(--line);padding:10px 18px;
+    border-radius:20px;font-size:13px;color:var(--text);opacity:0;pointer-events:none;
+    transition:opacity .25s;z-index:50;
+  }
+  .toast.show{opacity:1;}
+  .warn{color:var(--amber);font-size:12px;line-height:1.6;margin-top:4px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== SETUP ===== -->
+  <section class="screen active" id="screen-setup">
+    <h1>ゆらぎログ</h1>
+    <p class="sub">壁際に立ち、胸ポケットに入れて重心のふらつきを記録します。診断ではなく、日々の体感との比較用です。</p>
+
+    <div class="card">
+      <div class="label" style="margin-bottom:10px;">計測モード</div>
+      <div class="seg">
+        <button id="mode-open" class="on">開眼(固定時間)</button>
+        <button id="mode-closed">閉眼(任意終了)</button>
+      </div>
+      <div id="open-duration-row" class="row" style="margin-top:14px;">
+        <span class="label">計測時間</span>
+        <input type="number" id="openDuration" value="30" min="10" max="120" step="5"> 秒
+      </div>
+      <div id="closed-hint" class="warn" style="display:none;">
+        胸をトントンと2回軽く叩くと終了します。最長90秒で自動終了します。
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <span class="label">ポケット内で画面の向き</span>
+      </div>
+      <div class="seg" style="margin-top:10px;">
+        <button id="face-out" class="on">外向き</button>
+        <button id="face-in">内向き(体側)</button>
+      </div>
+      <div class="row" style="margin-top:14px;">
+        <span class="label">胸ポケットの高さ(床から目安cm)</span>
+        <input type="number" id="chestHeight" value="130" min="80" max="180" step="1">
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="btn btn-primary" id="btnStart">計測を開始する</button>
+    <button class="btn btn-ghost" id="btnHistory">これまでの記録を見る</button>
+  </section>
+
+  <!-- ===== PREP (30s countdown) ===== -->
+  <section class="screen" id="screen-prep">
+    <div class="center">
+      <div class="countdown" id="prepCount">30</div>
+      <p class="hint" style="margin-top:8px;">秒後に計測開始</p>
+      <div class="steps">
+        <div>① <b>壁際</b>から半歩離れて立つ</div>
+        <div>② スマホを<b>胸ポケット</b>に入れる</div>
+        <div>③ 背筋を伸ばし、自然に立つ</div>
+        <div>④ 開始音が鳴ったら<b id="eyeInstruction">目を開いたまま</b>静止</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost" id="btnCancelPrep">キャンセル</button>
+  </section>
+
+  <!-- ===== MEASURING ===== -->
+  <section class="screen" id="screen-measure">
+    <div class="center">
+      <div class="pulse"><div class="pulse-dot"></div></div>
+      <div class="timer-big mono" id="measureTimer">0.0s</div>
+      <p class="hint" id="measureHint">計測中です。そのまま静止してください</p>
+    </div>
+    <button class="btn btn-danger" id="btnStopMeasure">今すぐ終了</button>
+  </section>
+
+  <!-- ===== RESULT ===== -->
+  <section class="screen" id="screen-result">
+    <h1>計測結果</h1>
+    <p class="sub" id="resultMeta"></p>
+
+    <div class="compass-wrap">
+      <svg id="compassSvg" width="260" height="260" viewBox="0 0 260 260"></svg>
+    </div>
+
+    <div class="result-grid" id="resultGrid"></div>
+
+    <div class="card" id="maxTiltCard">
+      <div class="label" style="margin-bottom:6px;">最大傾斜</div>
+      <div class="mono" id="maxTiltVal" style="font-size:15px;"></div>
+    </div>
+
+    <button class="btn btn-primary" id="btnBackHome">閉じる</button>
+    <button class="btn btn-ghost" id="btnRetry">もう一度計測する</button>
+  </section>
+
+  <!-- ===== HISTORY ===== -->
+  <section class="screen" id="screen-history">
+    <h1>記録一覧</h1>
+    <p class="sub">端末内に保存されています(他の端末とは共有されません)。</p>
+    <div class="card" id="historyList" style="padding:4px 14px;"></div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" id="btnHistoryBack">戻る</button>
+  </section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- state ----------
+  const S = {
+    mode: 'open',            // 'open' | 'closed'
+    openDuration: 30,
+    faceOut: true,
+    chestHeight: 130,
+    baseline: null,          // {beta, gamma}
+    samples: [],             // {t, dBeta, dGamma}
+    startTs: 0,
+    measuring: false,
+    prepTimer: null,
+    measureTimer: null,
+    tapTimes: [],
+    wakeLock: null
+  };
+
+  const $ = id => document.getElementById(id);
+  const show = id => {
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    $(id).classList.add('active');
+  };
+  function toast(msg){
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._h); toast._h = setTimeout(()=>t.classList.remove('show'), 2200);
+  }
+
+  // ---------- setup screen wiring ----------
+  $('mode-open').onclick = ()=>{
+    S.mode='open';
+    $('mode-open').classList.add('on'); $('mode-closed').classList.remove('on');
+    $('open-duration-row').style.display='flex'; $('closed-hint').style.display='none';
+  };
+  $('mode-closed').onclick = ()=>{
+    S.mode='closed';
+    $('mode-closed').classList.add('on'); $('mode-open').classList.remove('on');
+    $('open-duration-row').style.display='none'; $('closed-hint').style.display='block';
+  };
+  $('face-out').onclick = ()=>{ S.faceOut=true; $('face-out').classList.add('on'); $('face-in').classList.remove('on'); };
+  $('face-in').onclick  = ()=>{ S.faceOut=false; $('face-in').classList.add('on'); $('face-out').classList.remove('on'); };
+
+  $('btnHistory').onclick = ()=>{ renderHistory(); show('screen-history'); };
+  $('btnHistoryBack').onclick = ()=> show('screen-setup');
+
+  // ---------- permission + start ----------
+  $('btnStart').onclick = async ()=>{
+    S.openDuration = parseInt($('openDuration').value,10) || 30;
+    S.chestHeight = parseInt($('chestHeight').value,10) || 130;
+
+    if (!window.DeviceOrientationEvent){
+      toast('この端末/ブラウザはセンサーに対応していません');
+      return;
+    }
+    try{
+      if (typeof DeviceOrientationEvent.requestPermission === 'function'){
+        const r1 = await DeviceOrientationEvent.requestPermission();
+        if (r1 !== 'granted'){ toast('モーションセンサーの許可が必要です'); return; }
+      }
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
+        await DeviceMotionEvent.requestPermission();
+      }
+    }catch(e){ toast('許可の取得に失敗しました: '+e.message); return; }
+
+    try{
+      if ('wakeLock' in navigator){ S.wakeLock = await navigator.wakeLock.request('screen'); }
+    }catch(e){ /* 対応していない端末は無視 */ }
+
+    startPrep();
+  };
+
+  $('btnCancelPrep').onclick = ()=>{
+    clearInterval(S.prepTimer);
+    show('screen-setup');
+  };
+
+  function startPrep(){
+    $('eyeInstruction').textContent = S.mode==='open' ? '目を開いたまま' : '目を閉じて';
+    let n = 30;
+    $('prepCount').textContent = n;
+    show('screen-prep');
+    S.prepTimer = setInterval(()=>{
+      n -= 1;
+      $('prepCount').textContent = n;
+      if (n<=0){
+        clearInterval(S.prepTimer);
+        beep(880,120);
+        beginMeasurement();
+      } else if (n<=3){
+        beep(440,80);
+      }
+    },1000);
+  }
+
+  // ---------- audio beep (no external files needed) ----------
+  let actx;
+  function beep(freq, dur){
+    try{
+      actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+      const o = actx.createOscillator(); const g = actx.createGain();
+      o.frequency.value = freq; o.type='sine';
+      o.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(0.0001, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.35, actx.currentTime+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur/1000);
+      o.start(); o.stop(actx.currentTime + dur/1000 + 0.02);
+    }catch(e){}
+  }
+  function alarmSound(){
+    beep(660,150); setTimeout(()=>beep(880,150),180); setTimeout(()=>beep(1046,220),360);
+  }
+
+  // ---------- measurement ----------
+  let calibBuf = [];
+  function onOrient(e){
+    if (e.beta===null || e.gamma===null) return;
+    const now = performance.now();
+
+    if (!S.measuring) return;
+    const elapsed = (now - S.startTs)/1000;
+
+    // first 1s -> calibration
+    if (S.baseline===null){
+      calibBuf.push({beta:e.beta, gamma:e.gamma});
+      if (elapsed >= 1.0){
+        const b = calibBuf.reduce((a,c)=>a+c.beta,0)/calibBuf.length;
+        const g = calibBuf.reduce((a,c)=>a+c.gamma,0)/calibBuf.length;
+        S.baseline = {beta:b, gamma:g};
+        calibBuf = [];
+      }
+      return;
+    }
+
+    let dBeta = e.beta - S.baseline.beta;   // 前後方向の傾き
+    let dGamma = e.gamma - S.baseline.gamma; // 左右方向の傾き
+    if (!S.faceOut){ dBeta = -dBeta; dGamma = -dGamma; } // 画面が体側向きなら符号反転
+
+    S.samples.push({t:elapsed, dBeta, dGamma});
+  }
+
+  function onMotion(e){
+    if (!S.measuring || S.mode!=='closed') return;
+    const a = e.acceleration || e.accelerationIncludingGravity;
+    if (!a) return;
+    const mag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+    if (mag > 9){ // 軽く叩いた時の加速度スパイク閾値
+      const now = performance.now();
+      S.tapTimes = S.tapTimes.filter(t => now-t < 900);
+      S.tapTimes.push(now);
+      if (S.tapTimes.length >= 2){
+        S.tapTimes = [];
+        finishMeasurement('tap');
+      }
+    }
+  }
+
+  function beginMeasurement(){
+    S.samples = [];
+    S.baseline = null;
+    calibBuf = [];
+    S.tapTimes = [];
+    S.measuring = true;
+    S.startTs = performance.now();
+
+    window.addEventListener('deviceorientation', onOrient);
+    window.addEventListener('devicemotion', onMotion);
+
+    show('screen-measure');
+    $('measureHint').textContent = S.mode==='open'
+      ? '計測中です。そのまま静止してください'
+      : '目を閉じたまま静止。終わったら胸を軽く2回叩いてください';
+
+    S.measureTimer = setInterval(()=>{
+      const el = (performance.now()-S.startTs)/1000;
+      $('measureTimer').textContent = el.toFixed(1)+'s';
+      if (S.mode==='open' && el >= S.openDuration){
+        finishMeasurement('auto');
+      } else if (S.mode==='closed' && el >= 90){
+        finishMeasurement('timeout');
+      }
+    },100);
+  }
+
+  $('btnStopMeasure').onclick = ()=> finishMeasurement('manual');
+
+  function finishMeasurement(reason){
+    if (!S.measuring) return;
+    S.measuring = false;
+    clearInterval(S.measureTimer);
+    window.removeEventListener('deviceorientation', onOrient);
+    window.removeEventListener('devicemotion', onMotion);
+    if (S.wakeLock){ S.wakeLock.release().catch(()=>{}); S.wakeLock=null; }
+    alarmSound();
+    const result = computeResult();
+    saveSession(result);
+    renderResult(result);
+    show('screen-result');
+  }
+
+  // ---------- result computation ----------
+  function computeResult(){
+    const samples = S.samples;
+    if (samples.length < 5){
+      return {empty:true, duration:0};
+    }
+    const THRESH = 2.0; // deg, ノイズ除去用の閾値
+
+    let maxF={v:0,t:0}, maxB={v:0,t:0}, maxR={v:0,t:0}, maxL={v:0,t:0};
+    let tF=0,tB=0,tR=0,tL=0;
+
+    for (let i=1;i<samples.length;i++){
+      const s = samples[i], prev = samples[i-1];
+      const dt = s.t - prev.t;
+
+      // dBeta: 正=前傾, 負=後傾 (画面外向き基準)
+      if (s.dBeta > maxF.v){ maxF={v:s.dBeta, t:s.t}; }
+      if (-s.dBeta > maxB.v){ maxB={v:-s.dBeta, t:s.t}; }
+      if (s.dGamma > maxR.v){ maxR={v:s.dGamma, t:s.t}; }
+      if (-s.dGamma > maxL.v){ maxL={v:-s.dGamma, t:s.t}; }
+
+      if (s.dBeta > THRESH) tF += dt;
+      else if (s.dBeta < -THRESH) tB += dt;
+      if (s.dGamma > THRESH) tR += dt;
+      else if (s.dGamma < -THRESH) tL += dt;
+    }
+
+    const h = S.chestHeight;
+    const toCm = deg => Math.round(h * Math.tan(deg*Math.PI/180) * 10)/10;
+
+    return {
+      empty:false,
+      duration: samples[samples.length-1].t,
+      mode: S.mode,
+      front: {deg:round1(maxF.v), cm:toCm(maxF.v), sec:round1(tF)},
+      back:  {deg:round1(maxB.v), cm:toCm(maxB.v), sec:round1(tB)},
+      right: {deg:round1(maxR.v), cm:toCm(maxR.v), sec:round1(tR)},
+      left:  {deg:round1(maxL.v), cm:toCm(maxL.v), sec:round1(tL)},
+      path: samples.filter((_,i)=>i%2===0).map(s=>[round1(s.dGamma), round1(s.dBeta)])
+    };
+  }
+  function round1(n){ return Math.round(n*10)/10; }
+
+  // ---------- render result ----------
+  function renderResult(r){
+    const d = new Date();
+    $('resultMeta').textContent =
+      d.toLocaleDateString('ja-JP') + ' ' + d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
+      + '  ・ ' + (r.mode==='open' ? '開眼' : '閉眼') + '  ・ 計測時間 ' + (r.duration||0).toFixed(1) + '秒';
+
+    if (r.empty){
+      $('resultGrid').innerHTML = '<div class="rcard" style="grid-column:1/3;">十分なデータが取得できませんでした。もう一度お試しください。</div>';
+      $('maxTiltCard').style.display='none';
+      drawCompass([]);
+      return;
+    }
+    $('maxTiltCard').style.display='block';
+
+    const items = [
+      ['前', r.front, 'F'], ['後', r.back, 'B'], ['右', r.right, 'R'], ['左', r.left, 'L']
+    ];
+    $('resultGrid').innerHTML = items.map(([label,v])=>`
+      <div class="rcard">
+        <div class="dir">${label}方向</div>
+        <div class="val">${v.deg}°</div>
+        <div class="sub2">約${v.cm}cm ・ ${v.sec}秒</div>
+      </div>
+    `).join('');
+
+    const strongest = items.reduce((a,b)=> a[1].deg>b[1].deg ? a : b);
+    $('maxTiltVal').textContent = `最大は「${strongest[0]}」方向に ${strongest[1].deg}° (約${strongest[1].cm}cm)`;
+
+    drawCompass(r.path);
+  }
+
+  function drawCompass(path){
+    const svg = $('compassSvg');
+    const cx=130, cy=130, R=100;
+    const scale = 8; // px per degree
+    let s = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#2c3542" stroke-width="1"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r="${R*0.66}" fill="none" stroke="#2c3542" stroke-width="1"/>`;
+    s += `<circle cx="${cx}" cy="${cy}" r="${R*0.33}" fill="none" stroke="#2c3542" stroke-width="1"/>`;
+    s += `<line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="#2c3542"/>`;
+    s += `<line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="#2c3542"/>`;
+    s += `<text x="${cx}" y="${cy-R-8}" fill="#8a95a5" font-size="12" text-anchor="middle">前</text>`;
+    s += `<text x="${cx}" y="${cy+R+18}" fill="#8a95a5" font-size="12" text-anchor="middle">後</text>`;
+    s += `<text x="${cx+R+14}" y="${cy+4}" fill="#8a95a5" font-size="12" text-anchor="middle">右</text>`;
+    s += `<text x="${cx-R-14}" y="${cy+4}" fill="#8a95a5" font-size="12" text-anchor="middle">左</text>`;
+
+    if (path.length>1){
+      const pts = path.map(([g,b])=>{
+        const x = cx + Math.max(-R,Math.min(R, g*scale));
+        const y = cy + Math.max(-R,Math.min(R, b*scale));
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      s += `<polyline points="${pts.join(' ')}" fill="none" stroke="#5ec9c0" stroke-width="1.6" stroke-linejoin="round" opacity="0.85"/>`;
+      const last = pts[pts.length-1].split(',');
+      s += `<circle cx="${last[0]}" cy="${last[1]}" r="4" fill="#e8a23d"/>`;
+    }
+    s += `<circle cx="${cx}" cy="${cy}" r="3" fill="#5ec9c0"/>`;
+    svg.innerHTML = s;
+  }
+
+  // ---------- history persistence ----------
+  function saveSession(r){
+    if (r.empty) return;
+    const key = 'yuragilog_sessions';
+    let list = [];
+    try{ list = JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){ list=[]; }
+    list.unshift({ ts: Date.now(), mode:r.mode, duration:r.duration,
+      front:r.front, back:r.back, left:r.left, right:r.right });
+    list = list.slice(0,200);
+    localStorage.setItem(key, JSON.stringify(list));
+  }
+
+  function renderHistory(){
+    let list = [];
+    try{ list = JSON.parse(localStorage.getItem('yuragilog_sessions') || '[]'); }catch(e){}
+    const el = $('historyList');
+    if (list.length===0){
+      el.innerHTML = '<div class="hist-item"><span class="hist-meta">まだ記録がありません</span></div>';
+      return;
+    }
+    el.innerHTML = list.map(s=>{
+      const d = new Date(s.ts);
+      const strongest = ['front','back','left','right'].map(k=>[k,s[k]]).reduce((a,b)=> a[1].deg>b[1].deg?a:b);
+      const labelMap = {front:'前',back:'後',left:'左',right:'右'};
+      return `<div class="hist-item">
+        <div>
+          <div class="hist-date">${d.toLocaleDateString('ja-JP')} ${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</div>
+          <div class="hist-meta">${s.mode==='open'?'開眼':'閉眼'} ・ ${s.duration.toFixed(1)}秒</div>
+        </div>
+        <div class="mono" style="text-align:right;">
+          <div>${labelMap[strongest[0]]} ${strongest[1].deg}°</div>
+          <div class="hist-meta">約${strongest[1].cm}cm</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  $('btnBackHome').onclick = ()=> show('screen-setup');
+  $('btnRetry').onclick = ()=>{ show('screen-setup'); };
+
+})();
+</script>
+</body>
+</html>
