@@ -513,7 +513,7 @@
     let list = [];
     try{ list = JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){ list=[]; }
     list.unshift({ ts: Date.now(), mode:r.mode, duration:r.duration,
-      front:r.front, back:r.back, left:r.left, right:r.right });
+      front:r.front, back:r.back, left:r.left, right:r.right, path:r.path });
     list = list.slice(0,200);
     localStorage.setItem(key, JSON.stringify(list));
   }
@@ -522,6 +522,7 @@
     let list = [];
     try{ list = JSON.parse(localStorage.getItem('yuragilog_sessions') || '[]'); }catch(e){}
     const el = $('historyList');
+    function mini(path=[]){const cx=60,cy=60,R=45,sc=3;let s=`<svg width='120' height='120' viewBox='0 0 120 120'><circle cx='${cx}' cy='${cy}' r='${R}' fill='none' stroke='#2c3542'/><line x1='15' y1='60' x2='105' y2='60' stroke='#2c3542'/><line x1='60' y1='15' x2='60' y2='105' stroke='#2c3542'/>`; if(path.length>1){const pts=path.map(([g,b])=>`${cx+g*sc},${cy+b*sc}`).join(' '); s+=`<polyline points='${pts}' fill='none' stroke='#5ec9c0' stroke-width='1.2'/>`;} return s+'</svg>';}
     if (list.length===0){
       el.innerHTML = '<div class="hist-item"><span class="hist-meta">まだ記録がありません</span></div>';
       return;
@@ -534,8 +535,7 @@
         <div>
           <div class="hist-date">${d.toLocaleDateString('ja-JP')} ${d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</div>
           <div class="hist-meta">${s.mode==='open'?'開眼':'閉眼'} ・ ${s.duration.toFixed(1)}秒</div>
-        </div>
-        <div class="mono" style="text-align:right;">
+        </div><div>'+mini(s.path||[])+'</div><div class="mono" style="text-align:right;">
           <div>${labelMap[strongest[0]]} ${strongest[1].deg}°</div>
           <div class="hist-meta">約${strongest[1].cm}cm</div>
         </div>
