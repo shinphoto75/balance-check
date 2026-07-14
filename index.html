@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ゆらぎログ">
 <title>ゆらぎログ - バランスセルフチェック</title>
 <style>
   :root{
@@ -276,8 +279,32 @@
       if ('wakeLock' in navigator){ S.wakeLock = await navigator.wakeLock.request('screen'); }
     }catch(e){ /* 対応していない端末は無視 */ }
 
+    await setupNotifications();
+
     startPrep();
   };
+
+  // ---------- notifications (ホーム画面追加時のみ有効) ----------
+  S.notifyEnabled = false;
+  async function setupNotifications(){
+    try{
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if (!isStandalone || !('serviceWorker' in navigator) || !('Notification' in window)) return;
+      await navigator.serviceWorker.register('sw.js');
+      const perm = await Notification.requestPermission();
+      S.notifyEnabled = (perm === 'granted');
+    }catch(e){ S.notifyEnabled = false; }
+  }
+  function notifyDone(summary){
+    if (!S.notifyEnabled) return;
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.showNotification('ゆらぎログ', {
+        body: '計測が終了しました。' + (summary||''),
+        icon: undefined,
+        tag: 'yuragilog-done'
+      });
+    }).catch(()=>{});
+  }
 
   $('btnCancelPrep').onclick = ()=>{
     clearInterval(S.prepTimer);
@@ -311,13 +338,22 @@
       o.frequency.value = freq; o.type='sine';
       o.connect(g); g.connect(actx.destination);
       g.gain.setValueAtTime(0.0001, actx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.35, actx.currentTime+0.01);
+      g.gain.exponentialRampToValueAtTime(0.6, actx.currentTime+0.01);
       g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur/1000);
       o.start(); o.stop(actx.currentTime + dur/1000 + 0.02);
     }catch(e){}
   }
   function alarmSound(){
-    beep(660,150); setTimeout(()=>beep(880,150),180); setTimeout(()=>beep(1046,220),360);
+    let i = 0;
+    const ring = ()=>{
+      beep(880,220); setTimeout(()=>beep(1046,220),260); setTimeout(()=>beep(880,300),520);
+    };
+    const iv = setInterval(()=>{
+      ring();
+      i++;
+      if (i>=4) clearInterval(iv); // 約4回、合計8秒ほど繰り返す
+    }, 900);
+    ring();
   }
 
   // ---------- measurement ----------
@@ -402,6 +438,9 @@
     if (navigator.vibrate) navigator.vibrate([300,150,300]);
     const result = computeResult();
     saveSession(result);
+    if (!result.empty){
+      notifyDone(`${result.mode==='open'?'開眼':'閉眼'} ${result.duration.toFixed(1)}秒`);
+    }
     renderResult(result);
     show('screen-result');
   }
