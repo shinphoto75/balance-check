@@ -120,10 +120,10 @@
       </div>
       <div id="open-duration-row" class="row" style="margin-top:14px;">
         <span class="label">計測時間</span>
-        <input type="number" id="openDuration" value="30" min="10" max="120" step="5"> 秒
+        <input type="number" id="openDuration" value="60" min="60" max="60" step="5"> 秒
       </div>
       <div id="closed-hint" class="warn" style="display:none;">
-        胸をトントンと2回軽く叩くと終了します。最長90秒で自動終了します。
+        60秒間そのまま静止してください。
       </div>
     </div>
 
@@ -283,7 +283,7 @@
 
   function startPrep(){
     $('eyeInstruction').textContent = S.mode==='open' ? '目を開いたまま' : '目を閉じて';
-    let n = 30;
+    let n = 10;
     $('prepCount').textContent = n;
     show('screen-prep');
     S.prepTimer = setInterval(()=>{
@@ -374,16 +374,14 @@
 
     show('screen-measure');
     $('measureHint').textContent = S.mode==='open'
-      ? '計測中です。そのまま静止してください'
-      : '目を閉じたまま静止。終わったら胸を軽く2回叩いてください';
+      ? '目を開けたまま60秒間静止してください'
+      : '目を閉じたまま60秒間静止してください';
 
     S.measureTimer = setInterval(()=>{
       const el = (performance.now()-S.startTs)/1000;
       $('measureTimer').textContent = el.toFixed(1)+'s';
-      if (S.mode==='open' && el >= S.openDuration){
+      if (el >= 60){
         finishMeasurement('auto');
-      } else if (S.mode==='closed' && el >= 90){
-        finishMeasurement('timeout');
       }
     },100);
   }
@@ -398,6 +396,7 @@
     window.removeEventListener('devicemotion', onMotion);
     if (S.wakeLock){ S.wakeLock.release().catch(()=>{}); S.wakeLock=null; }
     alarmSound();
+    if (navigator.vibrate) navigator.vibrate([300,150,300]);
     const result = computeResult();
     saveSession(result);
     renderResult(result);
