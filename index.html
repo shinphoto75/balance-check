@@ -178,6 +178,7 @@
   <section class="screen" id="screen-result">
     <h1>計測結果</h1>
     <p class="sub" id="resultMeta"></p>
+    <div class="warn" id="reliabilityWarning" style="display:none; background:var(--surface); border:1px solid var(--amber); border-radius:12px; padding:10px 14px; margin-bottom:14px;"></div>
 
     <div class="compass-wrap">
       <svg id="compassSvg" width="260" height="260" viewBox="0 0 260 260"></svg>
@@ -381,7 +382,7 @@
     let dGamma = e.gamma - S.baseline.gamma; // 左右方向の傾き
     if (!S.faceOut){ dBeta = -dBeta; dGamma = -dGamma; } // 画面が体側向きなら符号反転
 
-    S.samples.push({t:elapsed, dBeta, dGamma});
+    S.samples.push({t:elapsed, dBeta, dGamma, rawBeta:e.beta});
   }
 
   function onMotion(e){
@@ -447,11 +448,21 @@
 
   // ---------- result computation ----------
   function computeResult(){
-    const samples = S.samples;
-    if (samples.length < 5){
+    const rawSamples = S.samples;
+    if (rawSamples.length < 5){
       return {empty:true, duration:0};
     }
     const THRESH = 2.0; // deg, ノイズ除去用の閾値
+    const GIMBAL_LIMIT = 75; // beta(前後角)がこれを超えて水平に近づくとgammaが不安定になるため除外
+
+    const totalDuration = rawSamples[rawSamples.length-1].t;
+    const samples = rawSamples.filter(s => Math.abs(s.rawBeta) < GIMBAL_LIMIT);
+    const excludedCount = rawSamples.length - samples.length;
+    const excludedRatio = excludedCount / rawSamples.length;
+
+    if (samples.length < 5){
+      return {empty:true, duration:totalDuration, unreliable:true};
+    }
 
     let maxF={v:0,t:0}, maxB={v:0,t:0}, maxR={v:0,t:0}, maxL={v:0,t:0};
     let tF=0,tB=0,tR=0,tL=0;
@@ -459,6 +470,7 @@
     for (let i=1;i<samples.length;i++){
       const s = samples[i], prev = samples[i-1];
       const dt = s.t - prev.t;
+      if (dt <= 0 || dt > 1) continue; // 除外区間をまたぐ場合は経過時間として数えない
 
       // dBeta: 正=前傾, 負=後傾 (画面外向き基準)
       if (s.dBeta > maxF.v){ maxF={v:s.dBeta, t:s.t}; }
@@ -477,8 +489,10 @@
 
     return {
       empty:false,
-      duration: samples[samples.length-1].t,
+      duration: totalDuration,
       mode: S.mode,
+      unreliable: excludedRatio > 0.15,
+      excludedRatio: Math.round(excludedRatio*100),
       front: {deg:round1(maxF.v), cm:toCm(maxF.v), sec:round1(tF)},
       back:  {deg:round1(maxB.v), cm:toCm(maxB.v), sec:round1(tB)},
       right: {deg:round1(maxR.v), cm:toCm(maxR.v), sec:round1(tR)},
@@ -510,10 +524,19 @@
     if (r.empty){
       $('resultGrid').innerHTML = '<div class="rcard" style="grid-column:1/3;">十分なデータが取得できませんでした。もう一度お試しください。</div>';
       $('maxTiltCard').style.display='none';
+      $('reliabilityWarning').style.display='none';
       drawCompass([]);
       return;
     }
     $('maxTiltCard').style.display='block';
+
+    const warnEl = $('reliabilityWarning');
+    if (r.unreliable){
+      warnEl.style.display='block';
+      warnEl.textContent = `⚠ 計測中にセンサーが不安定になった区間を検出し、約${r.excludedRatio}%のデータを除外しました。姿勢の変化(持ち直し・しゃがむ等)があった可能性があります。参考程度にご覧ください。`;
+    } else {
+      warnEl.style.display='none';
+    }
 
     const items = [
       ['前', r.front, 'F'], ['後', r.back, 'B'], ['右', r.right, 'R'], ['左', r.left, 'L']
@@ -566,7 +589,8 @@
     let list = [];
     try{ list = JSON.parse(localStorage.getItem('yuragilog_sessions') || '[]'); }catch(e){ list=[]; }
     list.unshift({ ts: Date.now(), mode:r.mode, duration:r.duration,
-      front:r.front, back:r.back, left:r.left, right:r.right, path:r.path });
+      front:r.front, back:r.back, left:r.left, right:r.right, path:r.path,
+      unreliable:r.unreliable, excludedRatio:r.excludedRatio });
     list = list.slice(0,200);
     localStorage.setItem('yuragilog_sessions', JSON.stringify(list));
   }
