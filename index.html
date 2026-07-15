@@ -296,15 +296,17 @@
       S.notifyEnabled = (perm === 'granted');
     }catch(e){ S.notifyEnabled = false; }
   }
-  function notifyDone(summary){
+  function sendNotification(body, tag){
     if (!S.notifyEnabled) return;
     navigator.serviceWorker.ready.then(reg=>{
-      reg.showNotification('ゆらぎログ', {
-        body: '計測が終了しました。' + (summary||''),
-        icon: undefined,
-        tag: 'yuragilog-done'
-      });
+      reg.showNotification('ゆらぎログ', { body, tag });
     }).catch(()=>{});
+  }
+  function notifyStart(){
+    sendNotification('計測を開始しました。静止してください。', 'yuragilog-start');
+  }
+  function notifyDone(summary){
+    sendNotification('計測が終了しました。' + (summary||''), 'yuragilog-done');
   }
 
   $('btnCancelPrep').onclick = ()=>{
@@ -323,6 +325,7 @@
       if (n<=0){
         clearInterval(S.prepTimer);
         startAlarm();
+        notifyStart();
         beginMeasurement();
       } else if (n<=3){
         beep(440,80);
