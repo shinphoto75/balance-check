@@ -322,7 +322,7 @@
       $('prepCount').textContent = n;
       if (n<=0){
         clearInterval(S.prepTimer);
-        beep(880,120);
+        startAlarm();
         beginMeasurement();
       } else if (n<=3){
         beep(440,80);
@@ -355,6 +355,11 @@
       if (i>=4) clearInterval(iv); // 約4回、合計8秒ほど繰り返す
     }, 900);
     ring();
+  }
+  function startAlarm(){
+    // 終了音(下降・繰り返し)と区別できる、上昇する一回だけの開始音
+    beep(660,180); setTimeout(()=>beep(880,180),200); setTimeout(()=>beep(1175,280),400);
+    if (navigator.vibrate) navigator.vibrate(200);
   }
 
   // ---------- measurement ----------
